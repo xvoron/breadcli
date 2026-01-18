@@ -1,11 +1,11 @@
 import pytest
 
-from bread.parser import (
+from bread.domain.ir import (
     Block,
     BlockType,
     Span,
-    parse_html_to_ir,
 )
+from bread.parsing import parse_html_to_ir
 
 basic = """
 <html>

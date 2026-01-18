@@ -9,6 +9,7 @@ dependencies = [
     "beautifulsoup4>=4.14.2",
     "lxml>=6.0.2",
     "rich>=14.2.0",
+    "textual>=7.3.0",
 ]
 
 [dependency-groups]
