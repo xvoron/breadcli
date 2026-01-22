@@ -1,6 +1,6 @@
 import textwrap
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Any
 
 from bread.app.commands import Command, GoTo, PageLines, ScrollLines
 from bread.app.controller import LayoutEngine
@@ -198,10 +198,17 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
         return state
 
-    def slice(self, state: ReaderState) -> list[WrappedLine]:
+    def total_lines(self, state: ReaderState) -> int:
+        return self.get_total_wrapped_lines(state)
+
+    def line_at(self, state: ReaderState, i: int) -> str:
+        return self.get_wrapped_line(state, i).text
+
+    def slice(self, state: ReaderState) -> Any:
         """Return the lines to be displayed in the viewport.
 
         For NORMAL mode we don't return a precomputed slice; the widget will call
         get_total_wrapped_lines and get_wrapped_line for line-by-line rendering.
         """
-        return []
+        self._ensure_cache(state.position.spine)
+        return self

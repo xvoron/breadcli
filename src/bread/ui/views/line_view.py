@@ -12,12 +12,13 @@ from textual.widget import Widget
 
 from bread.app.commands import PageLines, ScrollLines
 from bread.app.controller import ReaderController
+from bread.app.state import ReaderState
 
 
 class NormalLineSlice(Protocol):
     """What the NORMAL layout engine returns from controller.current_slice()."""
-    def total_lines(self) -> int: ...
-    def line_at(self, global_line_index: int) -> str: ...
+    def total_lines(self, state: ReaderState) -> int: ...
+    def line_at(self, state: ReaderState, global_line_index: int) -> str: ...
 
 
 def notify_progress(func):
@@ -76,14 +77,12 @@ class LineReaderViewWidget(Widget):
         return max(self.size.width, 20)
 
     def _get_slice(self) -> NormalLineSlice:
-        slice_obj = self.controller.current_slice()
-        # If you want stricter checks, assert hasattr(slice_obj, "line_at") etc.
-        return slice_obj  # type: ignore[return-value]
+        return self.controller.current_slice()
 
     def _sync_virtual_size(self) -> None:
         slice_obj = self._get_slice()
         w = self._content_width()
-        total = max(int(slice_obj.total_lines()), 1)
+        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         self.virtual_size = Size(w, total)
 
         # Clamp top_line_hint to a legal range
@@ -137,7 +136,7 @@ class LineReaderViewWidget(Widget):
     @notify_progress
     def scroll_to_bottom(self) -> None:
         slice_obj = self._get_slice()
-        total = max(int(slice_obj.total_lines()), 1)
+        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         self.virtual_size = Size(self._content_width(), total)
         self.controller.state.top_line_hint = max(0, total - self.size.height)
         self.refresh()
@@ -146,7 +145,7 @@ class LineReaderViewWidget(Widget):
 
     def progress_percent(self) -> int:
         slice_obj = self._get_slice()
-        total = max(int(slice_obj.total_lines()), 1)
+        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         max_top = max(1, total - self.size.height)
         return int((self.controller.state.top_line_hint / max_top) * 100)
 
@@ -156,7 +155,7 @@ class LineReaderViewWidget(Widget):
         slice_obj = self._get_slice()
 
         global_line_index = self.controller.state.top_line_hint + y
-        line = slice_obj.line_at(global_line_index) or ""
+        line = slice_obj.line_at(self.controller.state, global_line_index) or ""
 
         width = self.size.width
         if len(line) < width:
