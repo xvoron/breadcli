@@ -1,16 +1,25 @@
-from typing import Any, Protocol
+from abc import ABC, abstractmethod
+from typing import Any
 
 from bread.app.commands import Command, ToggleMode
 from bread.app.state import ReaderState, ReadMode
 from bread.domain.model import DocumentPosition
 
 
-class LayoutEngine(Protocol):
+class LayoutEngine(ABC):
     mode: ReadMode
 
-    def set_viewport(self, width: int, height: int) -> None: ...
-    def apply(self, state: ReaderState, command: Command) -> ReaderState: ...
-    def slice(self, state: ReaderState) -> Any: ...
+    @abstractmethod
+    def set_viewport(self, width: int, height: int) -> None:
+        pass
+
+    @abstractmethod
+    def apply(self, state: ReaderState, command: Command) -> ReaderState:
+        pass
+
+    @abstractmethod
+    def slice(self, state: ReaderState) -> Any:
+        pass
 
 
 class ReaderController:

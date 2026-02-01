@@ -1,7 +1,7 @@
-from bread.domain.model import DocumentPosition
-
 from dataclasses import dataclass
 from enum import Enum
+
+from bread.domain.model import DocumentPosition
 
 
 class ReadMode(Enum):

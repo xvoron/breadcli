@@ -4,6 +4,7 @@ from bread.app.controller import ReaderController
 from bread.app.state import ReadMode
 from bread.domain.model import DocumentPosition
 from bread.engines.linewrap import LineWrappingLayoutEngine
+from bread.engines.rsvp import RSVPLayoutEngine
 from bread.epub.book import EpubBook
 from bread.parsing.html_to_ir import parse_html_to_ir
 from bread.ui.app import BreadReaderApp
@@ -14,11 +15,16 @@ def get_blocks(spine_index: int):
     html = book.read_chapter_html(spine_index)
     return parse_html_to_ir(html)
 
-engine = LineWrappingLayoutEngine(get_blocks)
+engine_normal = LineWrappingLayoutEngine(get_blocks)
+engine_rsvp = RSVPLayoutEngine(get_blocks)
+
 
 controller = ReaderController(
     initial_position=DocumentPosition(9, 0, 0, 0),
-    engines={ReadMode.NORMAL: engine},
+    engines={
+        ReadMode.NORMAL: engine_normal,
+        ReadMode.RSVP: engine_rsvp,
+     },
 )
 
 

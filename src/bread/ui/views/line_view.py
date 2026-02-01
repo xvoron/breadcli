@@ -61,8 +61,8 @@ class LineReaderViewWidget(Widget):
             self.set_sender(sender)
             self.percent = percent
 
-    def __init__(self, controller: ReaderController) -> None:
-        super().__init__()
+    def __init__(self, controller: ReaderController, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.controller = controller
 
         self.show_vertical_scrollbar = False
@@ -70,8 +70,6 @@ class LineReaderViewWidget(Widget):
 
         # Must be non-zero; updated on mount/resize/scroll_to_bottom.
         self.virtual_size = Size(1, 1)
-
-    # ---------- internal helpers ----------
 
     def _content_width(self) -> int:
         return max(self.size.width, 20)
@@ -96,8 +94,6 @@ class LineReaderViewWidget(Widget):
     def _notify_progress(self) -> None:
         self.post_message(self.ProgressChanged(self, self.progress_percent()))
 
-    # ---------- lifecycle ----------
-
     @notify_progress
     def on_mount(self) -> None:
         # Make engines aware of actual widget viewport
@@ -110,8 +106,6 @@ class LineReaderViewWidget(Widget):
         self.controller.set_viewport(self._content_width(), self.size.height)
         self._sync_virtual_size()
         self.refresh()
-
-    # ---------- scrolling API (called by App actions) ----------
 
     @notify_progress
     def scroll_by(self, dy: int) -> None:
@@ -141,15 +135,11 @@ class LineReaderViewWidget(Widget):
         self.controller.state.top_line_hint = max(0, total - self.size.height)
         self.refresh()
 
-    # ---------- progress ----------
-
     def progress_percent(self) -> int:
         slice_obj = self._get_slice()
         total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         max_top = max(1, total - self.size.height)
         return int((self.controller.state.top_line_hint / max_top) * 100)
-
-    # ---------- Line API ----------
 
     def render_line(self, y: int) -> Strip:
         slice_obj = self._get_slice()

@@ -17,6 +17,7 @@ class WrappedLine:
 
 class LineWrappingLayoutEngine(LayoutEngine):
     mode: ReadMode = ReadMode.NORMAL
+
     def __init__(self, get_blocks_for_spine: Callable[[int], list[Block]]) -> None:
         self._get_blocks_for_spine = get_blocks_for_spine
 
@@ -51,7 +52,7 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
         blocks = self._get_blocks_for_spine(spine_index)
 
-        wrapped_lines: list[list[str]] = [] # Maybe WrappedLine?
+        wrapped_lines: list[list[str]] = []
         line_offsets: list[list[int]] = []
         prefix: list[int] = []
 
