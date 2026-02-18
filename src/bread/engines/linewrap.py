@@ -19,10 +19,7 @@ class LineWrappingLayoutEngine(LayoutEngine):
     mode: ReadMode = ReadMode.NORMAL
 
     def __init__(self, get_blocks_for_spine: Callable[[int], list[Block]]) -> None:
-        self._get_blocks_for_spine = get_blocks_for_spine
-
-        self._viewport_width = 80
-        self._viewport_height = 24
+        super().__init__(get_blocks_for_spine)
 
         self._cache_spine_index: int | None = None
         self._cache_width: int | None = None

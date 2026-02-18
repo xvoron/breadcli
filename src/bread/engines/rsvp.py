@@ -1,4 +1,5 @@
 import re
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from bread.app.commands import Command, GoTo, RSVPNext, SetWPM, TogglePlay
@@ -8,20 +9,11 @@ from bread.domain.ir import Block, BlockType
 from bread.domain.model import DocumentPosition
 
 
-def _flattent_blocks_to_text(blocks: list[Block]) -> str:
-    parts: list[str] = []
-    for b in blocks:
-        if b.type in (BlockType.IMG, BlockType.TABLE):
-            parts.append(f"[{b.type.value.upper()}]")
-            parts.append("\n")
-            continue
-        if b.type == BlockType.PRE:
-            parts.append("".join(s.text for s in b.inlines))
-            parts.append("\n")
-            continue
-        parts.append("".join(s.text for s in b.inlines))
-        parts.append("\n")
-    return "".join(parts)
+@dataclass(frozen=True)
+class RSVPToken:
+    text: str
+    marks: frozenset[str]
+    position: DocumentPosition
 
 
 _OPEN = r"""["'“‘(\[{<]"""
@@ -38,21 +30,15 @@ _TOKEN_RE = re.compile(
     re.VERBOSE,
 )
 
-def tokenize(text: str) -> list[str]:
-    return _TOKEN_RE.findall(text)
-
 
 class RSVPLayoutEngine(LayoutEngine):
     mode: ReadMode = ReadMode.RSVP
 
     def __init__(self, get_blocks_for_spine: Callable[[int], list[Block]]) -> None:
-        self._get_blocks_for_spine = get_blocks_for_spine
-
-        self._viewport_width = 80
-        self._viewport_height = 24
+        super().__init__(get_blocks_for_spine)
 
         self._cache_spine_index: int | None = None
-        self._cache_tokens: list[str] = []
+        self._cache_tokens: list[RSVPToken] = []
 
     def set_viewport(self, width: int, height: int) -> None:
         self._viewport_width = max(20, width)
@@ -62,11 +48,38 @@ class RSVPLayoutEngine(LayoutEngine):
         if self._cache_spine_index == spine and self._cache_tokens:
             return
         blocks = self._get_blocks_for_spine(spine)
-        text = _flattent_blocks_to_text(blocks)
-        self._cache_tokens = tokenize(text)
-        if not self._cache_tokens:
-            self._cache_tokens = [""]  # Ensure at least one token
+        tokens: list[RSVPToken] = []
+        for block_idx, block in enumerate(blocks):
+            if block.type in (BlockType.IMG, BlockType.TABLE, BlockType.PRE):
+                tokens.append(RSVPToken(
+                    text=f"[{block.type.value.upper()}]",
+                    marks=frozenset(),
+                    position=DocumentPosition(
+                        spine=spine,
+                        block=block_idx,
+                        span=0,
+                        offset=0,
+                    ),
+                ))
+                continue
+            for span_idx, span in enumerate(block.inlines):
+                for match in _TOKEN_RE.finditer(span.text):
+                    tokens.append(RSVPToken(
+                        text=match.group(),
+                        marks=span.marks,
+                        position=DocumentPosition(
+                            spine=spine,
+                            block=block_idx,
+                            span=span_idx,
+                            offset=match.start(),
+                        ),
+                    ))
         self._cache_spine_index = spine
+        self._cache_tokens = tokens or [
+            RSVPToken(
+                text="", marks=frozenset(), position=DocumentPosition(spine, 0, 0, 0)
+            )
+        ]
 
     def apply(self, state: ReaderState, command: Command) -> ReaderState:
         self._ensure_tokens(state.position.spine)
@@ -92,8 +105,8 @@ class RSVPLayoutEngine(LayoutEngine):
             idx = max(0, min(new_state.position.offset + command.delta, n - 1))
             new_state.position = DocumentPosition(
                 spine=state.position.spine,
-                block=0,
-                span=0,
+                block=state.position.block,
+                span=state.position.span,
                 offset=idx,
             )
             return new_state
@@ -108,7 +121,7 @@ class RSVPLayoutEngine(LayoutEngine):
         if not self._cache_tokens:
             return ""
         idx = max(0, min(idx, len(self._cache_tokens) - 1))
-        return self._cache_tokens[idx]
+        return self._cache_tokens[idx].text
 
     def current_token(self, state: ReaderState) -> str:
         return self.token_at(state, state.position.offset)

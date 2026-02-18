@@ -254,21 +254,21 @@ All of these depend on stable canonical addressing, which you now have.
 Phase 1 — Reader MVP
 - [X] EPUB Model
 - [X] HTML → IR parser + tests
-- [ ] ReaderState + Controller
-- [ ] Normal (line-wrap) engine
-- [ ] Normal reader widget (Textual Line API)
-- [ ] Scroll navigation
+- [X] ReaderState + Controller
+- [X] Normal (line-wrap) engine
+- [X] Normal reader widget (Textual Line API)
+- [X] Scroll navigation
 
 Phase 2 — RSVP Mode
-- [ ] RSVP token stream engine
-- [ ] ORP-aligned RSVP widget
-- [ ] WPM control + timing
-- [ ] RSVP safety enforcement
+- [X] RSVP token stream engine
+- [X] ORP-aligned RSVP widget
+- [X] WPM control + timing
+- [X] RSVP safety enforcement
 
 Phase 3 — UX & Stability
-- [ ] Mode switching (Normal ↔ RSVP)
-- [ ] Resize-safe reflow
-- [ ] Progress tracking
+- [.] Mode switching (Normal ↔ RSVP)
+- [.] Resize-safe reflow
+- [.] Progress tracking
 - [ ] Status overlays
 
 Phase 4 — Power Features

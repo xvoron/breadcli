@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 from bread.app.commands import Command, ToggleMode
 from bread.app.state import ReaderState, ReadMode
+from bread.domain.ir import Block
 from bread.domain.model import DocumentPosition
 
 
 class LayoutEngine(ABC):
     mode: ReadMode
+
+    def __init__(self, get_blocks_for_spine: Callable[[int], list[Block]]) -> None:
+        self._get_blocks_for_spine = get_blocks_for_spine
+
+        self._viewport_width = 80
+        self._viewport_height = 24
 
     @abstractmethod
     def set_viewport(self, width: int, height: int) -> None:
