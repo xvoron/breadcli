@@ -2,10 +2,10 @@ import textwrap
 from dataclasses import dataclass
 from typing import Callable, Any
 
-from bread.app.commands import Command, GoTo, PageLines, ScrollLines
+from bread.app.commands import Command, GoTo, PageLines, ScrollLines, ScrollToEnd, ScrollToStart
 from bread.app.controller import LayoutEngine
 from bread.app.state import ReadMode, ReaderState
-from bread.domain.ir import Block, BlockType
+from bread.domain.ir import Block, BlockType, flatten_block_text
 from bread.domain.model import DocumentPosition
 
 
@@ -28,6 +28,19 @@ class LineWrappingLayoutEngine(LayoutEngine):
         self._block_prefix_line_counts: list[int] = []
         self._total_lines: int = 0
 
+        self._top_line: int = 0
+        # The canonical DocPos to restore _top_line from after every cache rebuild.
+        # Updated by seek_to and after every scroll command.
+        self._scroll_anchor: DocumentPosition = DocumentPosition(0, 0, 0, 0)
+
+    @property
+    def top_line(self) -> int:
+        return self._top_line
+
+    @top_line.setter
+    def top_line(self, value: int) -> None:
+        self._top_line = max(0, value)
+
     def set_viewport(self, width: int, height: int) -> None:
         self._viewport_width = max(20, width)
         self._viewport_height = max(1, height)
@@ -44,7 +57,10 @@ class LineWrappingLayoutEngine(LayoutEngine):
         self._total_lines = 0
 
     def _ensure_cache(self, spine_index: int) -> None:
-        if self._cache_spine_index == spine_index and self._cache_width == self._viewport_width:
+        if (
+            self._cache_spine_index == spine_index
+            and self._cache_width == self._viewport_width
+        ):
             return
 
         blocks = self._get_blocks_for_spine(spine_index)
@@ -69,9 +85,16 @@ class LineWrappingLayoutEngine(LayoutEngine):
         self._block_prefix_line_counts = prefix
         self._total_lines = running if running > 0 else 1
 
-    def _wrap_block(self, block: Block) -> tuple[list[str], list[int]]: # Maybe WrappedLine?
+        # Always recompute _top_line from the scroll anchor using the fresh layout.
+        # This makes seek_to and resize both correct regardless of timing.
+        if self._scroll_anchor.spine == spine_index:
+            self._top_line = self._compute_top_line(self._scroll_anchor)
+        else:
+            self._top_line = 0
+
+    def _wrap_block(self, block: Block) -> tuple[list[str], list[int]]:
         width = max(self._viewport_width, 20)
-        text = self._flatten_block_text(block)
+        text = flatten_block_text(block)
 
         if block.type == BlockType.PRE:
             raw_lines = text.splitlines() or [""]
@@ -108,14 +131,6 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
         return wrapped, offsets
 
-    def _flatten_block_text(self, block: Block) -> str:
-        if block.type in (BlockType.IMG, BlockType.TABLE):
-            return f"[{block.type.value.upper()}]"
-
-        if block.type == BlockType.PRE:
-            return "".join((span.text for span in block.inlines))
-
-        return "".join((span.text for span in block.inlines))
 
     def get_total_wrapped_lines(self, state: ReaderState) -> int:
         self._ensure_cache(state.position.spine)
@@ -169,29 +184,58 @@ class LineWrappingLayoutEngine(LayoutEngine):
             ),
         )
 
+    def _compute_top_line(self, position: DocumentPosition) -> int:
+        """Compute _top_line from a DocPos using already-built cache data.
+        Safe to call from within _ensure_cache (does NOT call _ensure_cache).
+        """
+        if position.block <= 0 or not self._block_prefix_line_counts:
+            return 0
+        idx = min(position.block - 1, len(self._block_prefix_line_counts) - 1)
+        line = self._block_prefix_line_counts[idx]
+        max_top = max(0, self._total_lines - self._viewport_height)
+        return min(line, max_top)
+
+    def _set_top_line(self, line: int, state: ReaderState) -> DocumentPosition:
+        """Set _top_line and sync _scroll_anchor. Returns new DocPos."""
+        self._top_line = line
+        pos = self.get_wrapped_line(state, self._top_line).position
+        self._scroll_anchor = pos
+        return pos
+
     def apply(self, state: ReaderState, command: Command) -> ReaderState:
         self._ensure_cache(state.position.spine)
+        new_state = ReaderState(**state.__dict__)
 
         if isinstance(command, GoTo):
-            new_state = ReaderState(**state.__dict__)
-            new_state.position = command.position.clamp_non_negative()
+            new_pos = command.position.clamp_non_negative()
+            self._scroll_anchor = new_pos
+            self._top_line = self._compute_top_line(new_pos)
+            new_state.position = new_pos
             return new_state
 
         if isinstance(command, ScrollLines):
-            new_state = ReaderState(**state.__dict__)
-            new_state.top_line_hint = max(0, state.top_line_hint + command.delta)
-
-            top_line = new_state.top_line_hint
-            new_state.position = self.get_wrapped_line(state, top_line).position
+            max_top = max(0, self._total_lines - self._viewport_height)
+            new_state.position = self._set_top_line(
+                max(0, min(self._top_line + command.delta, max_top)), state
+            )
             return new_state
 
         if isinstance(command, PageLines):
-            new_state = ReaderState(**state.__dict__)
+            max_top = max(0, self._total_lines - self._viewport_height)
             delta = command.pages * self._viewport_height
-            new_state.top_line_hint = max(0, state.top_line_hint + delta)
+            new_state.position = self._set_top_line(
+                max(0, min(self._top_line + delta, max_top)), state
+            )
+            return new_state
 
-            top_line = new_state.top_line_hint
-            new_state.position = self.get_wrapped_line(state, top_line).position
+        if isinstance(command, ScrollToStart):
+            new_state.position = self._set_top_line(0, state)
+            return new_state
+
+        if isinstance(command, ScrollToEnd):
+            new_state.position = self._set_top_line(
+                max(0, self._total_lines - self._viewport_height), state
+            )
             return new_state
 
         return state
@@ -210,3 +254,19 @@ class LineWrappingLayoutEngine(LayoutEngine):
         """
         self._ensure_cache(state.position.spine)
         return self
+
+    def current_position(self, state: ReaderState) -> DocumentPosition:
+        """True current position based on _top_line, not stale state.position."""
+        self._ensure_cache(state.position.spine)
+        return self.get_wrapped_line(state, self._top_line).position
+
+    def seek_to(self, position: DocumentPosition) -> DocumentPosition:
+        self._scroll_anchor = position
+        # Eagerly update _top_line if the cache is already valid for this spine.
+        # If not, _ensure_cache will recompute it from _scroll_anchor on rebuild.
+        if (
+            self._cache_spine_index == position.spine
+            and self._cache_width == self._viewport_width
+        ):
+            self._top_line = self._compute_top_line(position)
+        return position

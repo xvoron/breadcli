@@ -10,6 +10,8 @@ from bread.domain.model import DocumentPosition
 class DummyEngine(LayoutEngine):
     def __init__(self, mode):
         self.mode = mode
+        self._get_blocks_for_spine = lambda _: []
+
     def set_viewport(self, width: int, height: int) -> None:
         pass
 
@@ -18,6 +20,12 @@ class DummyEngine(LayoutEngine):
 
     def slice(self, state: ReaderState) -> Any:
         return None
+
+    def seek_to(self, position: DocumentPosition) -> DocumentPosition:
+        return position
+
+    def current_position(self, state: ReaderState) -> DocumentPosition:
+        return state.position
 
 
 def test_toggle_mode():

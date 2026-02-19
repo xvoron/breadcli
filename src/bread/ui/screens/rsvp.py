@@ -33,6 +33,10 @@ class RSVPScreen(Screen):
         self.app.controller.set_viewport(rsvp.size.width, rsvp.size.height)
         rsvp.sync_from_state()
 
+    def on_rsvp_reader_view_widget_ticked(self, _: RSVPReaderViewWidget.Ticked) -> None:
+        state = self.app.controller.state
+        self.stats.update(f"{state.wpm} WPM")
+
     def action_toggle_mode(self) -> None:
         self.app.action_toggle_mode()
 

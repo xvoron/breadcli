@@ -5,6 +5,7 @@ from rich.style import Style
 from rich.text import Text
 from textual.events import Resize
 from textual.geometry import Size
+from textual.message import Message
 from textual.widget import Widget
 
 from bread.app.commands import RSVPNext
@@ -41,6 +42,9 @@ class RSVPReaderViewWidget(Widget):
     }
     """
 
+    class Ticked(Message):
+        pass
+
     def __init__(self, controller: ReaderController, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.controller = controller
@@ -69,14 +73,8 @@ class RSVPReaderViewWidget(Widget):
         if not self.controller.state.playing:
             return
         self.controller.dispatch(RSVPNext(delta=1))
+        self.post_message(self.Ticked())
         self.refresh()
-
-        try:
-            screen = self.app.screen
-            if hasattr(screen, "_sync_hud"):
-                screen._sync_hud()
-        except Exception:
-            pass
 
     def sync_from_state(self) -> None:
         self._retime()

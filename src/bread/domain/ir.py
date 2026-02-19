@@ -30,3 +30,13 @@ class Block:
     type: BlockType
     inlines: tuple[Span, ...] = ()
     attrs: Mapping[str, str] = field(default_factory=dict)
+
+
+def flatten_block_text(block: Block) -> str:
+    if block.type in (BlockType.IMG, BlockType.TABLE):
+        return f"[{block.type.value.upper()}]"
+
+    if block.type == BlockType.PRE:
+        return "".join((span.text for span in block.inlines))
+
+    return "".join((span.text for span in block.inlines))

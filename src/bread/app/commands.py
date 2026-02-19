@@ -12,6 +12,15 @@ class Command:
 class ScrollLines(Command):
     delta: int
 
+@dataclass(frozen=True)
+class ScrollToStart(Command):
+    pass
+
+
+@dataclass(frozen=True)
+class ScrollToEnd(Command):
+    pass
+
 
 @dataclass(frozen=True)
 class PageLines(Command):

@@ -16,5 +16,3 @@ class ReaderState:
 
     wpm: int = 300
     playing: bool = False
-
-    top_line_hint: int = 0

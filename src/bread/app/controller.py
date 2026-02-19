@@ -28,6 +28,19 @@ class LayoutEngine(ABC):
     def slice(self, state: ReaderState) -> Any:
         pass
 
+    @abstractmethod
+    def seek_to(self, position: DocumentPosition) -> DocumentPosition:
+        pass
+
+    @abstractmethod
+    def current_position(self, state: ReaderState) -> DocumentPosition:
+        """Return the true current position as known by the engine.
+
+        This may differ from state.position when state.position is stale
+        (e.g. before the first command is dispatched after init or mode switch).
+        """
+        pass
+
 
 class ReaderController:
     def __init__(
@@ -45,6 +58,9 @@ class ReaderController:
 
         for engine in self.engines.values():
             engine.set_viewport(self.viewport_width, self.viewport_height)
+
+        # Prime the normal engine so the initial position is honoured on first render.
+        self.engines[ReadMode.NORMAL].seek_to(initial_position)
 
     def set_viewport(self, width: int, height: int) -> None:
         self.viewport_width = max(20, width)
@@ -67,11 +83,12 @@ class ReaderController:
 
     def _toggle_mode(self) -> None:
         self.state.playing = False
-        self.state.mode = (
-            ReadMode.RSVP
-            if self.state.mode == ReadMode.NORMAL
-            else ReadMode.NORMAL
-        )
+        # Ask the OUTGOING engine for its true current position.
+        # state.position may be stale (e.g. never scrolled since init or last seek).
+        outgoing_pos = self.engines[self.state.mode].current_position(self.state)
+        new_mode = ReadMode.RSVP if self.state.mode == ReadMode.NORMAL else ReadMode.NORMAL
+        self.state.position = self.engines[new_mode].seek_to(outgoing_pos)
+        self.state.mode = new_mode
 
     def current_slice(self) -> Any:
         return self.engines[self.state.mode].slice(self.state)

@@ -20,7 +20,7 @@ engine_rsvp = RSVPLayoutEngine(get_blocks)
 
 
 controller = ReaderController(
-    initial_position=DocumentPosition(9, 100, 20, 10),
+    initial_position=DocumentPosition(spine=5, block=0, span=0, offset=0),
     engines={
         ReadMode.NORMAL: engine_normal,
         ReadMode.RSVP: engine_rsvp,

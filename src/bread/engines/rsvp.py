@@ -1,3 +1,4 @@
+import bisect
 import re
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -45,7 +46,7 @@ class RSVPLayoutEngine(LayoutEngine):
         self._viewport_height = max(1, height)
 
     def _ensure_tokens(self, spine: int) -> None:
-        if self._cache_spine_index == spine and self._cache_tokens:
+        if self._cache_spine_index == spine:
             return
         blocks = self._get_blocks_for_spine(spine)
         tokens: list[RSVPToken] = []
@@ -102,26 +103,43 @@ class RSVPLayoutEngine(LayoutEngine):
             if n == 0:
                 return new_state
 
-            idx = max(0, min(new_state.position.offset + command.delta, n - 1))
-            new_state.position = DocumentPosition(
-                spine=state.position.spine,
-                block=state.position.block,
-                span=state.position.span,
-                offset=idx,
-            )
+            current_idx = self._token_idx_for(state)
+            new_idx = max(0, min(current_idx + command.delta, n - 1))
+            new_state.position = self._cache_tokens[new_idx].position
             return new_state
         return new_state
+
+    def _token_idx_for(self, state: ReaderState) -> int:
+        """Find the index of the current token based on the state's position.
+
+        So state position offset is character offset, but we want to move by token, so we need to
+        find the current token index first.
+        """
+        keys = [t.position for t in self._cache_tokens]
+        idx = bisect.bisect_right(keys, state.position) - 1
+        return max(0, idx)
 
     def slice(self, state: ReaderState) -> Any:
         self._ensure_tokens(state.position.spine)
         return self
 
-    def token_at(self, state: ReaderState, idx: int) -> str:
+    def token_at(self, state: ReaderState) -> str:
         self._ensure_tokens(state.position.spine)
-        if not self._cache_tokens:
-            return ""
-        idx = max(0, min(idx, len(self._cache_tokens) - 1))
+        idx = self._token_idx_for(state)
         return self._cache_tokens[idx].text
 
     def current_token(self, state: ReaderState) -> str:
-        return self.token_at(state, state.position.offset)
+        return self.token_at(state)
+
+    def current_position(self, state: ReaderState) -> DocumentPosition:
+        """True current position: the token the engine is actually on."""
+        self._ensure_tokens(state.position.spine)
+        idx = self._token_idx_for(state)
+        return self._cache_tokens[idx].position
+
+    def seek_to(self, position: DocumentPosition) -> DocumentPosition:
+        self._ensure_tokens(position.spine)
+        for token in self._cache_tokens:
+            if token.position >= position:
+                return token.position
+        return self._cache_tokens[-1].position

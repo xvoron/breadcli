@@ -10,7 +10,7 @@ from textual.message import Message
 from textual.strip import Strip
 from textual.widget import Widget
 
-from bread.app.commands import PageLines, ScrollLines
+from bread.app.commands import PageLines, ScrollLines, ScrollToEnd, ScrollToStart
 from bread.app.controller import ReaderController
 from bread.app.state import ReaderState
 
@@ -19,6 +19,11 @@ class NormalLineSlice(Protocol):
     """What the NORMAL layout engine returns from controller.current_slice()."""
     def total_lines(self, state: ReaderState) -> int: ...
     def line_at(self, state: ReaderState, global_line_index: int) -> str: ...
+    @property
+    def top_line(self) -> int: ...
+
+    @top_line.setter
+    def top_line(self, value: int) -> None: ...
 
 
 def notify_progress(func):
@@ -83,14 +88,6 @@ class LineReaderViewWidget(Widget):
         total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         self.virtual_size = Size(w, total)
 
-        # Clamp top_line_hint to a legal range
-        # Note: top_line_hint lives in state; engine updates it too.
-        max_top = max(0, total - self.size.height)
-        if self.controller.state.top_line_hint > max_top:
-            self.controller.state.top_line_hint = max_top
-        if self.controller.state.top_line_hint < 0:
-            self.controller.state.top_line_hint = 0
-
     def _notify_progress(self) -> None:
         self.post_message(self.ProgressChanged(self, self.progress_percent()))
 
@@ -121,30 +118,26 @@ class LineReaderViewWidget(Widget):
 
     @notify_progress
     def scroll_to_top(self) -> None:
-        # Use dispatch so state stays consistent with engine logic
-        # We emulate "go to line 0" as repeated scroll; simplest is to set hint + refresh.
-        self.controller.state.top_line_hint = 0
+        self.controller.dispatch(ScrollToStart())
         self._sync_virtual_size()
         self.refresh()
 
     @notify_progress
     def scroll_to_bottom(self) -> None:
-        slice_obj = self._get_slice()
-        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
-        self.virtual_size = Size(self._content_width(), total)
-        self.controller.state.top_line_hint = max(0, total - self.size.height)
+        self.controller.dispatch(ScrollToEnd())
+        self._sync_virtual_size()
         self.refresh()
 
     def progress_percent(self) -> int:
         slice_obj = self._get_slice()
         total = max(int(slice_obj.total_lines(self.controller.state)), 1)
         max_top = max(1, total - self.size.height)
-        return int((self.controller.state.top_line_hint / max_top) * 100)
+        return int((slice_obj.top_line / max_top) * 100)
 
     def render_line(self, y: int) -> Strip:
         slice_obj = self._get_slice()
 
-        global_line_index = self.controller.state.top_line_hint + y
+        global_line_index = slice_obj.top_line + y
         line = slice_obj.line_at(self.controller.state, global_line_index) or ""
 
         width = self.size.width
