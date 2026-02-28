@@ -1,12 +1,19 @@
 import textwrap
 from dataclasses import dataclass
-from typing import Callable, Any
+from typing import Any, Callable
 
-from bread.app.commands import Command, GoTo, PageLines, ScrollLines, ScrollToEnd, ScrollToStart
-from bread.app.controller import LayoutEngine
-from bread.app.state import ReadMode, ReaderState
+from bread.app.commands import (
+    Command,
+    GoTo,
+    PageLines,
+    ScrollLines,
+    ScrollToEnd,
+    ScrollToStart,
+)
+from bread.app.state import ReaderState, ReadMode
 from bread.domain.ir import Block, BlockType, flatten_block_text
 from bread.domain.model import DocumentPosition
+from bread.engines.core import LayoutEngine
 
 
 @dataclass(frozen=True)
@@ -245,15 +252,6 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
     def line_at(self, state: ReaderState, i: int) -> str:
         return self.get_wrapped_line(state, i).text
-
-    def slice(self, state: ReaderState) -> Any:
-        """Return the lines to be displayed in the viewport.
-
-        For NORMAL mode we don't return a precomputed slice; the widget will call
-        get_total_wrapped_lines and get_wrapped_line for line-by-line rendering.
-        """
-        self._ensure_cache(state.position.spine)
-        return self
 
     def current_position(self, state: ReaderState) -> DocumentPosition:
         """True current position based on _top_line, not stale state.position."""

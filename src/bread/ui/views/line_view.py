@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from functools import wraps
-from typing import Protocol
 
 from rich.segment import Segment
 from textual.events import Resize
@@ -12,18 +11,8 @@ from textual.widget import Widget
 
 from bread.app.commands import PageLines, ScrollLines, ScrollToEnd, ScrollToStart
 from bread.app.controller import ReaderController
-from bread.app.state import ReaderState
-
-
-class NormalLineSlice(Protocol):
-    """What the NORMAL layout engine returns from controller.current_slice()."""
-    def total_lines(self, state: ReaderState) -> int: ...
-    def line_at(self, state: ReaderState, global_line_index: int) -> str: ...
-    @property
-    def top_line(self) -> int: ...
-
-    @top_line.setter
-    def top_line(self, value: int) -> None: ...
+from bread.engines.linewrap import LineWrappingLayoutEngine
+from bread.ui.views.core import CoreReaderView
 
 
 def notify_progress(func):
@@ -36,7 +25,7 @@ def notify_progress(func):
     return wrapper
 
 
-class LineReaderViewWidget(Widget):
+class LineReaderViewWidget(CoreReaderView[LineWrappingLayoutEngine]):
     """
     NORMAL-mode view widget (Widget + Line API).
 
@@ -67,8 +56,12 @@ class LineReaderViewWidget(Widget):
             self.percent = percent
 
     def __init__(self, controller: ReaderController, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.controller = controller
+        super().__init__(
+            controller=controller,
+            engine=controller.normal_engine,
+            *args,
+            **kwargs,
+        )
 
         self.show_vertical_scrollbar = False
         self.show_horizontal_scrollbar = False
@@ -79,13 +72,9 @@ class LineReaderViewWidget(Widget):
     def _content_width(self) -> int:
         return max(self.size.width, 20)
 
-    def _get_slice(self) -> NormalLineSlice:
-        return self.controller.current_slice()
-
     def _sync_virtual_size(self) -> None:
-        slice_obj = self._get_slice()
         w = self._content_width()
-        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
+        total = max(int(self.engine.total_lines(self.controller.state)), 1)
         self.virtual_size = Size(w, total)
 
     def _notify_progress(self) -> None:
@@ -129,16 +118,13 @@ class LineReaderViewWidget(Widget):
         self.refresh()
 
     def progress_percent(self) -> int:
-        slice_obj = self._get_slice()
-        total = max(int(slice_obj.total_lines(self.controller.state)), 1)
+        total = max(int(self.engine.total_lines(self.controller.state)), 1)
         max_top = max(1, total - self.size.height)
-        return int((slice_obj.top_line / max_top) * 100)
+        return int((self.engine.top_line / max_top) * 100)
 
     def render_line(self, y: int) -> Strip:
-        slice_obj = self._get_slice()
-
-        global_line_index = slice_obj.top_line + y
-        line = slice_obj.line_at(self.controller.state, global_line_index) or ""
+        global_line_index = self.engine.top_line + y
+        line = self.engine.line_at(self.controller.state, global_line_index) or ""
 
         width = self.size.width
         if len(line) < width:

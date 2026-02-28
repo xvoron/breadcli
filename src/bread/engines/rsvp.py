@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from bread.app.commands import Command, GoTo, RSVPNext, SetWPM, TogglePlay
-from bread.app.controller import LayoutEngine
 from bread.app.state import ReaderState, ReadMode
 from bread.domain.ir import Block, BlockType
 from bread.domain.model import DocumentPosition
+from bread.engines.core import LayoutEngine
 
 
 @dataclass(frozen=True)
@@ -118,10 +118,6 @@ class RSVPLayoutEngine(LayoutEngine):
         keys = [t.position for t in self._cache_tokens]
         idx = bisect.bisect_right(keys, state.position) - 1
         return max(0, idx)
-
-    def slice(self, state: ReaderState) -> Any:
-        self._ensure_tokens(state.position.spine)
-        return self
 
     def token_at(self, state: ReaderState) -> str:
         self._ensure_tokens(state.position.spine)

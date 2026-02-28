@@ -6,10 +6,11 @@ from rich.text import Text
 from textual.events import Resize
 from textual.geometry import Size
 from textual.message import Message
-from textual.widget import Widget
 
 from bread.app.commands import RSVPNext
 from bread.app.controller import ReaderController
+from bread.engines.rsvp import RSVPLayoutEngine
+from bread.ui.views.core import CoreReaderView
 
 
 def orp_index(core_word: str) -> int:
@@ -25,7 +26,7 @@ def orp_index(core_word: str) -> int:
     return 4
 
 
-class RSVPReaderViewWidget(Widget):
+class RSVPReaderViewWidget(CoreReaderView[RSVPLayoutEngine]):
     COMPONENT_CLASSES = {"pivot"}
 
     DEFAULT_CSS = """
@@ -46,7 +47,9 @@ class RSVPReaderViewWidget(Widget):
         pass
 
     def __init__(self, controller: ReaderController, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+        super().__init__(
+            controller=controller, engine=controller.rsvp_engine, *args, **kwargs
+        )
         self.controller = controller
         self._timer = None
 
@@ -81,8 +84,7 @@ class RSVPReaderViewWidget(Widget):
         self.refresh()
 
     def render(self) -> Text:
-        engine = self.controller.current_slice()
-        word = engine.current_token(self.controller.state)
+        word = self.engine.current_token(self.controller.state)
 
         # ORP alignment: align pivot to center column
         core = core_for_orp(word)
