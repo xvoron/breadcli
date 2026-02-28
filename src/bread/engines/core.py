@@ -15,6 +15,11 @@ class LayoutEngine(ABC):
 
         self._viewport_width = 80
         self._viewport_height = 24
+        self._spine_count = 1
+
+    def set_spine_count(self, count: int) -> None:
+        """Set the total number of spines in the document. """
+        self._spine_count = count
 
     @abstractmethod
     def set_viewport(self, width: int, height: int) -> None:

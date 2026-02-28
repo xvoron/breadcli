@@ -3,7 +3,7 @@ from __future__ import annotations
 from textual.app import ComposeResult
 from textual.containers import CenterMiddle
 from textual.screen import Screen
-from textual.widgets import Footer, Header, ProgressBar
+from textual.widgets import Footer, Header, ProgressBar, Static
 
 from bread.ui.views.line_view import LineReaderViewWidget
 
@@ -62,4 +62,6 @@ class NormalScreen(Screen):
     def on_line_reader_view_widget_progress_changed(
         self, message: LineReaderViewWidget.ProgressChanged
     ) -> None:
+        chapter_info = self.app.controller.get_spine_info()
         self.query_one("#progress", ProgressBar).update(progress=message.percent, total=100)
+

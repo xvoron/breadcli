@@ -15,6 +15,8 @@ from bread.domain.ir import Block, BlockType, flatten_block_text
 from bread.domain.model import DocumentPosition
 from bread.engines.core import LayoutEngine
 
+SPINE_END_BUFFER = 3
+
 
 @dataclass(frozen=True)
 class WrappedLine:
@@ -90,7 +92,7 @@ class LineWrappingLayoutEngine(LayoutEngine):
         self._block_wrapped_lines = wrapped_lines
         self._block_line_offsets = line_offsets
         self._block_prefix_line_counts = prefix
-        self._total_lines = running if running > 0 else 1
+        self._total_lines = (running if running > 0 else 1) + SPINE_END_BUFFER
 
         # Always recompute _top_line from the scroll anchor using the fresh layout.
         # This makes seek_to and resize both correct regardless of timing.
@@ -150,6 +152,30 @@ class LineWrappingLayoutEngine(LayoutEngine):
             global_line_index = 0
         if global_line_index >= self._total_lines:
             global_line_index = self._total_lines - 1
+
+        # Handle buffer lines at the end of the spine
+        actual_content_lines = self._total_lines - SPINE_END_BUFFER
+
+        if global_line_index >= actual_content_lines:
+            if global_line_index == actual_content_lines:
+                return WrappedLine(
+                    f"--- End of chapter {state.position.spine + 1} ---",
+                    DocumentPosition(
+                        spine=state.position.spine,
+                        block=len(self._block_wrapped_lines) - 1 if self._block_wrapped_lines else 0,
+                        span=0,
+                        offset=0,
+                    )
+                )
+            return WrappedLine(
+                "",
+                DocumentPosition(
+                    spine=state.position.spine,
+                    block=len(self._block_wrapped_lines) - 1 if self._block_wrapped_lines else 0,
+                    span=0,
+                    offset=0,
+                )
+            )
 
         block_index = 0
         while (
@@ -222,17 +248,55 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
         if isinstance(command, ScrollLines):
             max_top = max(0, self._total_lines - self._viewport_height)
-            new_state.position = self._set_top_line(
-                max(0, min(self._top_line + command.delta, max_top)), state
-            )
+            new_top = self._top_line + command.delta
+
+            # move to next spine
+            if new_top > max_top and state.position.spine < self._spine_count - 1:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine + 1,
+                    block=0,
+                    span=0,
+                    offset=0,
+                )
+            # move to previous spine
+            elif new_top < 0 and state.position.spine > 0:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine - 1,
+                    block=-1,   # end of the previous spine
+                    span=0,
+                    offset=0,
+                )
+
+            # normal scroll within current spine
+            else:
+                new_state.position = self._set_top_line(
+                    max(0, min(new_top, max_top)), state
+                )
             return new_state
 
         if isinstance(command, PageLines):
             max_top = max(0, self._total_lines - self._viewport_height)
             delta = command.pages * self._viewport_height
-            new_state.position = self._set_top_line(
-                max(0, min(self._top_line + delta, max_top)), state
-            )
+            new_top = self._top_line + delta
+
+            if new_top > max_top and state.position.spine < self._spine_count - 1:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine + 1,
+                    block=0,
+                    span=0,
+                    offset=0,
+                )
+            elif new_top < 0 and state.position.spine > 0:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine - 1,
+                    block=-1,   # end of the previous spine
+                    span=0,
+                    offset=0,
+                )
+            else:
+                new_state.position = self._set_top_line(
+                    max(0, min(new_top, max_top)), state
+                )
             return new_state
 
         if isinstance(command, ScrollToStart):
@@ -260,6 +324,17 @@ class LineWrappingLayoutEngine(LayoutEngine):
 
     def seek_to(self, position: DocumentPosition) -> DocumentPosition:
         self._scroll_anchor = position
+
+        # Handle positioning at end of spine
+        if position.block == -1:
+            self._ensure_cache(position.spine)
+            actual_content_lines = self._total_lines - SPINE_END_BUFFER
+            self._top_line = max(0, actual_content_lines - self._viewport_height)
+            return self.get_wrapped_line(
+                ReaderState(position, mode=ReadMode.NORMAL),
+                actual_content_lines - 1
+            ).position
+
         # Eagerly update _top_line if the cache is already valid for this spine.
         # If not, _ensure_cache will recompute it from _scroll_anchor on rebuild.
         if (

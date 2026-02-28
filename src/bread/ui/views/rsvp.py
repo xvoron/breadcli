@@ -55,6 +55,9 @@ class RSVPReaderViewWidget(CoreReaderView[RSVPLayoutEngine]):
 
         self.virtual_size = Size(1, 1)
 
+    def progress_percent(self) -> int:
+        return int(self.controller.get_global_progress() * 100)
+
     def on_mount(self):
         self._timer = self.set_interval(self._interval_secondes(), self._tick, pause=False)
         self.refresh()

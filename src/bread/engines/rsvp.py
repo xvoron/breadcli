@@ -1,13 +1,15 @@
 import bisect
 import re
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
 from bread.app.commands import Command, GoTo, RSVPNext, SetWPM, TogglePlay
 from bread.app.state import ReaderState, ReadMode
 from bread.domain.ir import Block, BlockType
 from bread.domain.model import DocumentPosition
 from bread.engines.core import LayoutEngine
+
+SPINE_END_PAUSE_TOKENS = 3
 
 
 @dataclass(frozen=True)
@@ -75,6 +77,33 @@ class RSVPLayoutEngine(LayoutEngine):
                             offset=match.start(),
                         ),
                     ))
+
+        # Handle end of the spine with some extra pause tokens.
+        last_pos = tokens[-1].position if tokens else DocumentPosition(spine, 0, 0, 0)
+        for i in range(SPINE_END_PAUSE_TOKENS):
+            if i == 0:
+                tokens.append(RSVPToken(
+                    text=f"[Chapter {spine + 1} End]",
+                    marks=frozenset(),
+                    position=DocumentPosition(
+                        spine=spine,
+                        block=last_pos.block,
+                        span=last_pos.span,
+                        offset=last_pos.offset + 1 + i,
+                              )
+                ))
+            else:
+                tokens.append(RSVPToken(
+                    text="",
+                    marks=frozenset(),
+                    position=DocumentPosition(
+                        spine=spine,
+                        block=last_pos.block,
+                        span=last_pos.span,
+                        offset=last_pos.offset + 1 + i,
+                    )
+                ))
+
         self._cache_spine_index = spine
         self._cache_tokens = tokens or [
             RSVPToken(
@@ -104,9 +133,27 @@ class RSVPLayoutEngine(LayoutEngine):
                 return new_state
 
             current_idx = self._token_idx_for(state)
-            new_idx = max(0, min(current_idx + command.delta, n - 1))
-            new_state.position = self._cache_tokens[new_idx].position
+            new_idx = current_idx + command.delta
+
+            if new_idx >= n and state.position.spine < self._spine_count - 1:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine + 1,
+                    block=0,
+                    span=0,
+                    offset=0,
+                )
+            elif new_idx < 0 and state.position.spine > 0:
+                new_state.position = DocumentPosition(
+                    spine=state.position.spine - 1,
+                    block=-1,
+                    span=0,
+                    offset=0,
+                )
+            else:
+                new_idx = max(0, min(new_idx, n - 1))
+                new_state.position = self._cache_tokens[new_idx].position
             return new_state
+
         return new_state
 
     def _token_idx_for(self, state: ReaderState) -> int:
@@ -135,6 +182,12 @@ class RSVPLayoutEngine(LayoutEngine):
 
     def seek_to(self, position: DocumentPosition) -> DocumentPosition:
         self._ensure_tokens(position.spine)
+        if position.block == -1:
+            actual_token_count = len(self._cache_tokens) - SPINE_END_PAUSE_TOKENS
+            if actual_token_count > 0:
+                return self._cache_tokens[actual_token_count - 1].position
+            return self._cache_tokens[-1].position
+
         for token in self._cache_tokens:
             if token.position >= position:
                 return token.position

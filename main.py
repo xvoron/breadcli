@@ -1,4 +1,5 @@
 from pathlib import Path
+import typer
 
 from bread.app.controller import ReaderController
 from bread.app.state import ReadMode
@@ -25,11 +26,17 @@ controller = ReaderController(
         ReadMode.NORMAL: engine_normal,
         ReadMode.RSVP: engine_rsvp,
      },
+    spine_count=book.chapter_count(),
 )
 
+def run(path: Path):
+    """Run the Bread Reader application.
 
-if __name__ == "__main__":
-
+    - path (Path): The path to the EPUB file to read.
+    """
     app = BreadReaderApp(controller)
     app.run()
 
+
+if __name__ == "__main__":
+    typer.run(run)

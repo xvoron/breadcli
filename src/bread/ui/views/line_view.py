@@ -118,9 +118,7 @@ class LineReaderViewWidget(CoreReaderView[LineWrappingLayoutEngine]):
         self.refresh()
 
     def progress_percent(self) -> int:
-        total = max(int(self.engine.total_lines(self.controller.state)), 1)
-        max_top = max(1, total - self.size.height)
-        return int((self.engine.top_line / max_top) * 100)
+        return int(self.controller.get_global_progress() * 100)
 
     def render_line(self, y: int) -> Strip:
         global_line_index = self.engine.top_line + y
