@@ -59,7 +59,13 @@ class RSVPReaderViewWidget(CoreReaderView[RSVPLayoutEngine]):
         return int(self.controller.get_global_progress() * 100)
 
     def on_mount(self):
+        # Set up timer but don't set viewport yet (size may not be final)
         self._timer = self.set_interval(self._interval_secondes(), self._tick, pause=False)
+    
+    def on_show(self) -> None:
+        """Called when widget becomes visible - after layout is complete."""
+        # Now we have final size - safe to set viewport
+        self.controller.set_viewport(self.size.width, self.size.height)
         self.refresh()
 
     def on_resize(self, _: Resize) -> None:

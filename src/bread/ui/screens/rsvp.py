@@ -29,7 +29,15 @@ class RSVPScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Initial setup - viewport will be set in on_show after layout
         rsvp = self.query_one("#rsvp", RSVPReaderViewWidget)
+        rsvp.sync_from_state()
+    
+    def on_show(self) -> None:
+        """Called when screen becomes visible - after layout is complete."""
+        rsvp = self.query_one("#rsvp", RSVPReaderViewWidget)
+        
+        # Now the layout is finalized - safe to set viewport
         self.app.controller.set_viewport(rsvp.size.width, rsvp.size.height)
         rsvp.sync_from_state()
 

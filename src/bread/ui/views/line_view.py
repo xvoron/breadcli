@@ -80,15 +80,22 @@ class LineReaderViewWidget(CoreReaderView[LineWrappingLayoutEngine]):
     def _notify_progress(self) -> None:
         self.post_message(self.ProgressChanged(self, self.progress_percent()))
 
-    @notify_progress
     def on_mount(self) -> None:
-        # Make engines aware of actual widget viewport
+        # Don't set viewport here - size might not be final yet during layout
+        # Will be set in on_show after layout completes
+        pass
+    
+    def on_show(self) -> None:
+        """Called when widget becomes visible - after layout is complete."""
+        # Now we have the final size - set viewport and sync
         self.controller.set_viewport(self._content_width(), self.size.height)
         self._sync_virtual_size()
+        self._notify_progress()
         self.refresh()
 
     @notify_progress
     def on_resize(self, _: Resize) -> None:
+        # This is called AFTER layout is finalized - safe to set viewport here
         self.controller.set_viewport(self._content_width(), self.size.height)
         self._sync_virtual_size()
         self.refresh()

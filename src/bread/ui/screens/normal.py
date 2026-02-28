@@ -28,9 +28,17 @@ class NormalScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Initial setup - but don't set viewport yet (size may not be final)
         reader = self.query_one("#reader", LineReaderViewWidget)
         progress = self.query_one("#progress", ProgressBar)
-
+        progress.update(progress=reader.progress_percent(), total=100)
+    
+    def on_show(self) -> None:
+        """Called when screen becomes visible - after layout is complete."""
+        reader = self.query_one("#reader", LineReaderViewWidget)
+        progress = self.query_one("#progress", ProgressBar)
+        
+        # Now the layout is finalized - safe to set viewport
         self.app.controller.set_viewport(reader.size.width, reader.size.height)
         reader._sync_virtual_size()
         progress.update(progress=reader.progress_percent(), total=100)
